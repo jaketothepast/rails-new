@@ -37,6 +37,8 @@ fn main() {
         Err(error) => {
             if error.kind() == ErrorKind::NotFound {
                 println!("Docker is not installed");
+            } else {
+                println!("Failed to execute process: {}", error);
             }
             std::process::exit(1);
         }
