@@ -4,7 +4,7 @@
 mod docker_client;
 mod rails_new;
 use rails_new::{Cli, Commands};
-use std::{io::Write, process::Command};
+use std::{io::Write, process::Command, io::ErrorKind};
 
 use clap::Parser;
 
@@ -23,22 +23,31 @@ fn main() {
 
     // Run docker build --build-arg RUBY_VERSION=$RUBY_VERSION --build-arg RAILS_VERSION=$RAILS_VERSION -t rails-new-$RUBY_VERSION-$RAILS_VERSION
     // passing the content of DOCKERFILE to the command stdin
-    let mut child = DockerClient::build_image(
+    let child = DockerClient::build_image(
         &ruby_version,
         rails_version,
         os_specific::get_user_id(),
         os_specific::get_group_id(),
         rebuild,
     )
-    .spawn()
-    .expect("Failed to execute process");
+    .spawn();
 
-    let mut stdin = child.stdin.take().expect("Failed to open stdin");
+    let mut child_ref = match child {
+        Ok(child) => child,
+        Err(error) => {
+            if error.kind() == ErrorKind::NotFound {
+                println!("Docker is not installed");
+            }
+            std::process::exit(1);
+        }
+    };
+
+    let mut stdin = child_ref.stdin.take().expect("Failed to open stdin");
     std::thread::spawn(move || {
         stdin.write_all(os_specific::dockerfile_content()).unwrap();
     });
 
-    let status = child.wait().expect("failed to wait on child");
+    let status = child_ref.wait().expect("failed to wait on child");
 
     assert!(status.success());
 
